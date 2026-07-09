@@ -33,7 +33,7 @@ def clean(text):
     return ' '.join(text.split()).strip()
 
 
-def truncate(text, max_len=300):
+def truncate(text, max_len=500):
     if len(text) > max_len:
         return text[:max_len-3] + '...'
     return text
@@ -93,17 +93,26 @@ async def scrape_work(work_id):
     author = clean(author_tag.text) if author_tag else 'Unknown Author'
     author_url = f"https://archiveofourown.org{author_tag['href']}" if author_tag and author_tag.get('href') else None
 
-    summary_tag = soup.find('blockquote', class_='summary')
-    summary = truncate(clean(summary_tag.text)) if summary_tag else ''
+    summary_div = soup.find('div', class_='summary')
+    if summary_div:
+        blockquote = summary_div.find('blockquote')
+        summary = truncate(clean(blockquote.text)) if blockquote else ''
+    else:
+        summary = ''
 
     rating = meta_value(soup, 'Rating') or 'Not Rated'
     fandoms = meta_values(soup, 'Fandom')
     fandom = fandoms[0] if fandoms else ''
 
     tags = meta_values(soup, 'Additional Tags')
-    tag_str = ', '.join(tags[:5])
-    if len(tags) > 5:
-        tag_str += f' and {len(tags)-5} more'
+    tag_str = ''
+    for tag in tags:
+        new_str = tag_str + (', ' if tag_str else '') + tag
+        if len(new_str) > 1000:
+            remaining = len(tags) - tags.index(tag)
+            tag_str = new_str + f' (+{remaining} more)'
+            break
+        tag_str = new_str
 
     stats_dl = soup.find('dl', class_='stats')
     words = chapters = ''
