@@ -17,12 +17,12 @@ intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 AO3_WORK = re.compile(r'(?:https?://)?(?:www\.)?archiveofourown\.org/works/(\d+)', re.IGNORECASE)
-AO3_WORK_SHORT = re.compile(r'(?:https?://)?(?:www\.)?ao3\.org/works/(\d+)', re.IGNORECASE)
-AO3_CHAPTER = re.compile(r'(?:https?://)?(?:www\.)?archiveofourown\.org/works/(\d+)/chapters/\d+', re.IGNORECASE)
-AO3_CHAPTER_SHORT = re.compile(r'(?:https?://)?(?:www\.)?ao3\.org/works/(\d+)/chapters/\d+', re.IGNORECASE)
 AO3_USER = re.compile(r'(?:https?://)?(?:www\.)?archiveofourown\.org/users/([\w-]+)', re.IGNORECASE)
 AO3_SERIES = re.compile(r'(?:https?://)?(?:www\.)?archiveofourown\.org/series/(\d+)', re.IGNORECASE)
 AO3_COLLECTION = re.compile(r'(?:https?://)?(?:www\.)?archiveofourown\.org/collections/([\w-]+)', re.IGNORECASE)
+AO3_WORK_SHORT = re.compile(r'(?:https?://)?(?:www\.)?ao3\.org/works/(\d+)', re.IGNORECASE)
+AO3_CHAPTER = re.compile(r'(?:https?://)?(?:www\.)?archiveofourown\.org/works/(\d+)/chapters/\d+', re.IGNORECASE)
+AO3_CHAPTER_SHORT = re.compile(r'(?:https?://)?(?:www\.)?ao3\.org/works/(\d+)/chapters/\d+', re.IGNORECASE)
 
 RATING_COLORS = {
     'Not Rated': 0x999999,
@@ -197,4 +197,88 @@ async def scrape_series(series_id):
     desc_tag = soup.find('blockquote')
     desc = truncate(clean(desc_tag.text)) if desc_tag else ''
 
-    works = meta_value(soup, 'Works') or '
+    works = meta_value(soup, 'Works') or '?'
+
+    embed = discord.Embed(title=title, url=f'https://archiveofourown.org/series/{series_id}', description=desc, color=0x00CC99)
+    embed.add_field(name='Works', value=works, inline=True)
+    if author:
+        embed.set_author(name=author, url=author_url)
+    embed.set_footer(text='Archive of Our Own')
+
+    return embed
+
+
+async def scrape_collection(name):
+    soup = await fetch(f'https://archiveofourown.org/collections/{name}')
+    if not soup:
+        return None
+
+    title_tag = soup.find('h2', class_='heading')
+    title = clean(title_tag.text) if title_tag else name
+
+    desc_tag = soup.find('div', class_='intro')
+    desc = truncate(clean(desc_tag.text)) if desc_tag else ''
+
+    works = meta_value(soup, 'Works') or '?'
+
+    embed = discord.Embed(title=title, url=f'https://archiveofourown.org/collections/{name}', description=desc, color=0xCC6600)
+    embed.add_field(name='Works', value=works, inline=True)
+    embed.set_footer(text='Archive of Our Own')
+
+    return embed
+
+
+@bot.event
+async def on_ready():
+    print(f'Bot is online! Logged in as {bot.user.name}')
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name='archiveofourown.org'))
+
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    content = message.content
+
+    for pattern, handler in [
+        (AO3_CHAPTER, lambda m: scrape_work(m.group(1))),
+        (AO3_CHAPTER_SHORT, lambda m: scrape_work(m.group(1))),
+        (AO3_WORK, lambda m: scrape_work(m.group(1))),
+        (AO3_WORK_SHORT, lambda m: scrape_work(m.group(1))),
+        (AO3_USER, lambda m: scrape_user(m.group(1))),
+        (AO3_SERIES, lambda m: scrape_series(m.group(1))),
+        (AO3_COLLECTION, lambda m: scrape_collection(m.group(1))),
+    ]:
+        match = pattern.search(content)
+        if match:
+            async with message.channel.typing():
+                embed = await handler(match)
+                if embed:
+                    await message.reply(embed=embed, mention_author=False)
+                else:
+                    await message.reply('Could not fetch info from AO3. The page may be private or AO3 may be unavailable.', mention_author=False)
+            return
+
+
+async def web_handler(request):
+    return web.Response(text='AO3 Linker Bot is running!')
+
+async def main():
+    port = int(os.getenv('PORT', 8080))
+    app = web.Application()
+    app.router.add_get('/', web_handler)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    print(f'Web server started on port {port}')
+
+    await bot.start(TOKEN)
+
+if __name__ == '__main__':
+    if not TOKEN:
+        print('ERROR: No Discord token found!')
+        print('Create a .env file in this folder with: DISCORD_TOKEN=your_token_here')
+    else:
+        asyncio.run(main())
