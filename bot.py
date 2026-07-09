@@ -48,7 +48,8 @@ def rating_color(rating):
     return RATING_COLORS.get(rating, DEFAULT_COLOR)
 
 
-scraper = cloudscraper.create_scraper(verify=False)
+scraper = cloudscraper.create_scraper()
+scraper.verify = False
 
 async def fetch(url):
     try:
