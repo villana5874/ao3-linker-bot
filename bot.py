@@ -6,6 +6,7 @@ from aiohttp import web
 from bs4 import BeautifulSoup
 import os
 import asyncio
+import cloudscraper
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -45,28 +46,23 @@ def rating_color(rating):
     return RATING_COLORS.get(rating, DEFAULT_COLOR)
 
 
+scraper = cloudscraper.create_scraper()
+
 async def fetch(url):
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-    }
-    async with aiohttp.ClientSession(headers=headers) as session:
-        try:
-            async with session.get(url, timeout=30, allow_redirects=True) as r:
-                text = await r.text(encoding='utf-8', errors='replace')
-                soup = BeautifulSoup(text, 'html.parser')
-                if soup.find('h2', class_='title') or soup.find('h2', class_='heading'):
-                    return soup
-                if 'content warning' in text.lower() or 'adult content' in text.lower():
-                    async with session.get(url, timeout=30, allow_redirects=True) as r2:
-                        if r2.status == 200:
-                            return BeautifulSoup(await r2.text(encoding='utf-8', errors='replace'), 'html.parser')
-                return soup
-        except asyncio.TimeoutError:
-            return None
-        except aiohttp.ClientError:
-            return None
+    try:
+        loop = asyncio.get_event_loop()
+        r = await loop.run_in_executor(None, lambda: scraper.get(url, timeout=30))
+        text = r.text
+        soup = BeautifulSoup(text, 'html.parser')
+        if soup.find('h2', class_='title') or soup.find('h2', class_='heading'):
+            return soup
+        if 'content warning' in text.lower() or 'adult content' in text.lower():
+            r2 = await loop.run_in_executor(None, lambda: scraper.get(url, timeout=30))
+            if r2.status_code == 200:
+                return BeautifulSoup(r2.text, 'html.parser')
+        return soup
+    except Exception:
+        return None
 
 
 def meta_value(soup, label):
@@ -93,12 +89,8 @@ async def scrape_work(work_id):
     if not soup:
         return None
 
-    page_title_tag = soup.find('title')
-    page_title = clean(page_title_tag.text) if page_title_tag else 'no title tag'
-    print(f'DEBUG: Page title: {page_title}')
-
     title = soup.find('h2', class_='title')
-    title = clean(title.text) if title else f'Unknown Title (page: {page_title})'
+    title = clean(title.text) if title else 'Unknown Title'
 
     author_tag = soup.find('a', rel='author')
     author = clean(author_tag.text) if author_tag else 'Unknown Author'
