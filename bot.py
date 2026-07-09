@@ -5,7 +5,7 @@ import aiohttp
 from aiohttp import web
 from bs4 import BeautifulSoup
 import os
-import threading
+import asyncio
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -259,17 +259,21 @@ async def on_message(message):
 async def web_handler(request):
     return web.Response(text='AO3 Linker Bot is running!')
 
-def run_web():
+async def main():
+    port = int(os.getenv('PORT', 8080))
     app = web.Application()
     app.router.add_get('/', web_handler)
-    port = int(os.getenv('PORT', 8080))
-    web.run_app(app, host='0.0.0.0', port=port, print=lambda x: None)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    print(f'Web server started on port {port}')
+
+    await bot.start(TOKEN)
 
 if __name__ == '__main__':
     if not TOKEN:
         print('ERROR: No Discord token found!')
         print('Create a .env file in this folder with: DISCORD_TOKEN=your_token_here')
     else:
-        t = threading.Thread(target=run_web, daemon=True)
-        t.start()
-        bot.run(TOKEN)
+        asyncio.run(main())
