@@ -100,43 +100,55 @@ async def scrape_work(work_id):
     else:
         summary = ''
 
+    def join_tags(tags, max_len=500):
+        result = ''
+        for tag in tags:
+            next_str = result + (', ' if result else '') + tag
+            if len(next_str) > max_len:
+                remaining = len(tags) - tags.index(tag)
+                return result + f' (+{remaining} more)'
+            result = next_str
+        return result
+
     rating = meta_value(soup, 'Rating') or 'Not Rated'
+    warning = join_tags(meta_values(soup, 'Archive Warning')) or 'None'
+    category = join_tags(meta_values(soup, 'Category')) or 'Not Specified'
     fandoms = meta_values(soup, 'Fandom')
     fandom = fandoms[0] if fandoms else ''
-
-    tags = meta_values(soup, 'Additional Tags')
-    tag_str = ''
-    for tag in tags:
-        new_str = tag_str + (', ' if tag_str else '') + tag
-        if len(new_str) > 1000:
-            remaining = len(tags) - tags.index(tag)
-            tag_str = new_str + f' (+{remaining} more)'
-            break
-        tag_str = new_str
+    characters = join_tags(meta_values(soup, 'Character'), max_len=500)
+    relationships = join_tags(meta_values(soup, 'Relationship'), max_len=500)
+    tags = join_tags(meta_values(soup, 'Additional Tags'), max_len=1000)
 
     stats_dl = soup.find('dl', class_='stats')
     words = chapters = ''
+
     if stats_dl:
         for dt in stats_dl.find_all('dt'):
-            if 'Words' in dt.text:
-                dd = dt.find_next_sibling('dd')
-                if dd:
-                    words = clean(dd.text)
-            elif 'Chapters' in dt.text:
-                dd = dt.find_next_sibling('dd')
-                if dd:
-                    chapters = clean(dd.text)
+            label = clean(dt.text)
+            dd = dt.find_next_sibling('dd')
+            if dd:
+                val = clean(dd.text)
+                if 'Words' in label:
+                    words = val
+                elif 'Chapters' in label:
+                    chapters = val
 
     embed = discord.Embed(title=title, url=f'https://archiveofourown.org/works/{work_id}', description=summary, color=rating_color(rating))
     embed.add_field(name='Rating', value=rating, inline=True)
+    embed.add_field(name='Warning', value=warning, inline=True)
+    embed.add_field(name='Category', value=category, inline=True)
     if fandom:
         embed.add_field(name='Fandom', value=fandom, inline=True)
+    if relationships:
+        embed.add_field(name='Relationships', value=relationships, inline=False)
+    if characters:
+        embed.add_field(name='Characters', value=characters, inline=False)
     if words:
         embed.add_field(name='Words', value=words, inline=True)
     if chapters:
         embed.add_field(name='Chapters', value=chapters, inline=True)
-    if tag_str:
-        embed.add_field(name='Tags', value=tag_str, inline=False)
+    if tags:
+        embed.add_field(name='Tags', value=tags, inline=False)
 
     if author:
         embed.set_author(name=author, url=author_url)
