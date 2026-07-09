@@ -46,19 +46,28 @@ def rating_color(rating):
 
 
 async def fetch(url):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Cache-Control': 'max-age=0',
+    }
     cookie_jar = aiohttp.CookieJar()
     async with aiohttp.ClientSession(headers=headers, cookie_jar=cookie_jar) as session:
         try:
-            async with session.get(url, timeout=15) as r:
+            async with session.get(url, timeout=30) as r:
                 text = await r.text()
                 soup = BeautifulSoup(text, 'html.parser')
                 if soup.find('h2', class_='title'):
                     return soup
                 if 'content warning' in text.lower() or 'adult content' in text.lower():
-                    async with session.get(url, timeout=15) as r2:
+                    async with session.get(url, timeout=30) as r2:
                         if r2.status == 200:
                             return BeautifulSoup(await r2.text(), 'html.parser')
+                        return soup
                 return soup
         except Exception:
             return None
