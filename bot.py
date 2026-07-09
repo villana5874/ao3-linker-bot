@@ -49,7 +49,6 @@ def rating_color(rating):
 
 
 scraper = cloudscraper.create_scraper()
-scraper.verify = False
 
 async def fetch(url):
     try:
