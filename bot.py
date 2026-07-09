@@ -91,8 +91,12 @@ async def scrape_work(work_id):
     if not soup:
         return None
 
+    page_title_tag = soup.find('title')
+    page_title = clean(page_title_tag.text) if page_title_tag else 'no title tag'
+    print(f'DEBUG WORK {work_id}: title={page_title}')
+
     title = soup.find('h2', class_='title')
-    title = clean(title.text) if title else 'Unknown Title'
+    title = clean(title.text) if title else f'Unknown Title ({page_title})'
 
     author_tag = soup.find('a', rel='author')
     author = clean(author_tag.text) if author_tag else 'Unknown Author'
