@@ -51,16 +51,15 @@ async def fetch(url):
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
     }
-    connector = aiohttp.TCPConnector(ssl=False)
-    async with aiohttp.ClientSession(headers=headers, connector=connector) as session:
+    async with aiohttp.ClientSession(headers=headers) as session:
         try:
-            async with session.get(url, timeout=30) as r:
+            async with session.get(url, timeout=30, allow_redirects=True) as r:
                 text = await r.text(encoding='utf-8', errors='replace')
                 soup = BeautifulSoup(text, 'html.parser')
-                if soup.find('h2', class_='title'):
+                if soup.find('h2', class_='title') or soup.find('h2', class_='heading'):
                     return soup
                 if 'content warning' in text.lower() or 'adult content' in text.lower():
-                    async with session.get(url, timeout=30) as r2:
+                    async with session.get(url, timeout=30, allow_redirects=True) as r2:
                         if r2.status == 200:
                             return BeautifulSoup(await r2.text(encoding='utf-8', errors='replace'), 'html.parser')
                 return soup
@@ -94,8 +93,12 @@ async def scrape_work(work_id):
     if not soup:
         return None
 
+    page_title_tag = soup.find('title')
+    page_title = clean(page_title_tag.text) if page_title_tag else 'no title tag'
+    print(f'DEBUG: Page title: {page_title}')
+
     title = soup.find('h2', class_='title')
-    title = clean(title.text) if title else 'Unknown Title'
+    title = clean(title.text) if title else f'Unknown Title (page: {page_title})'
 
     author_tag = soup.find('a', rel='author')
     author = clean(author_tag.text) if author_tag else 'Unknown Author'
